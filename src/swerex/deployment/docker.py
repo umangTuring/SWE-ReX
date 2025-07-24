@@ -117,7 +117,7 @@ class DockerDeployment(AbstractDeployment):
         rex_args = f"--auth-token {token}"
         pipx_install = "python3 -m pip install pipx && python3 -m pipx ensurepath"
         if self._config.python_standalone_dir:
-            cmd = f"{self._config.python_standalone_dir}/python3.11/bin/{REMOTE_EXECUTABLE_NAME} {rex_args}"
+            cmd = f"{self._config.python_standalone_dir}/bin/{REMOTE_EXECUTABLE_NAME} {rex_args}"
         else:
             cmd = f"{REMOTE_EXECUTABLE_NAME} {rex_args} || ({pipx_install} && pipx run {PACKAGE_NAME} {rex_args})"
         # Need to wrap with /bin/sh -c to avoid having '&&' interpreted by the parent shell
@@ -157,7 +157,7 @@ class DockerDeployment(AbstractDeployment):
             # Install build dependencies
             f"ARG CONDA_ENV_PATH={self._config.python_standalone_dir}\n"
             "RUN conda create -p ${CONDA_ENV_PATH} python=3.11 pip\n"
-            "SHELL ['conda', 'run', '-p', '${CONDA_ENV_PATH}', '/bin/bash', '-c']\n"
+            "RUN conda run -p ${CONDA_ENV_PATH} --no-capture-output pip install --no-cache-dir swe-rex\n"
             f"RUN pip install --no-cache-dir {PACKAGE_NAME}\n"
             # Production stage
             f"FROM {platform_arg} $BASE_IMAGE\n"
