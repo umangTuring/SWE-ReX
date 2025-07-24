@@ -153,41 +153,20 @@ class DockerDeployment(AbstractDeployment):
         return (
             "ARG BASE_IMAGE\n\n"
             # Build stage for standalone Python
-            f"FROM {platform_arg} python:3.11-slim AS builder\n"
+            f"FROM {platform_arg} continuumio/miniconda3:latest AS builder\n"
             # Install build dependencies
-            "RUN apt-get update && apt-get install -y \\\n"
-            "    wget \\\n"
-            "    gcc \\\n"
-            "    make \\\n"
-            "    zlib1g-dev \\\n"
-            "    libssl-dev \\\n"
-            "    && rm -rf /var/lib/apt/lists/*\n\n"
-            # Download and compile Python as standalone
-            "WORKDIR /build\n"
-            "RUN wget https://www.python.org/ftp/python/3.11.8/Python-3.11.8.tgz \\\n"
-            "    && tar xzf Python-3.11.8.tgz\n"
-            "WORKDIR /build/Python-3.11.8\n"
-            "RUN ./configure \\\n"
-            "    --prefix=/root/python3.11 \\\n"
-            "    --enable-shared \\\n"
-            "    LDFLAGS='-Wl,-rpath=/root/python3.11/lib' && \\\n"
-            "    make -j$(nproc) && \\\n"
-            "    make install && \\\n"
-            "    ldconfig\n\n"
+            f"ARG CONDA_ENV_PATH={self._config.python_standalone_dir}\n"
+            "RUN conda create -p ${CONDA_ENV_PATH} python=3.11 pip\n"
+            "SHELL ['conda', 'run', '-p', '${CONDA_ENV_PATH}', '/bin/bash', '-c']\n"
+            f"RUN pip install --no-cache-dir {PACKAGE_NAME}\n"
             # Production stage
             f"FROM {platform_arg} $BASE_IMAGE\n"
             # Ensure we have the required runtime libraries
-            "RUN apt-get update && apt-get install -y \\\n"
-            "    libc6 \\\n"
-            "    && rm -rf /var/lib/apt/lists/*\n"
-            # Copy the standalone Python installation
-            f"COPY --from=builder /root/python3.11 {self._config.python_standalone_dir}/python3.11\n"
-            f"ENV LD_LIBRARY_PATH={self._config.python_standalone_dir}/python3.11/lib:${{LD_LIBRARY_PATH:-}}\n"
-            # Verify installation
-            f"RUN {self._config.python_standalone_dir}/python3.11/bin/python3 --version\n"
+            f"ARG CONDA_ENV_PATH={self._config.python_standalone_dir}\n"
+            "COPY --from=builder ${CONDA_ENV_PATH} ${CONDA_ENV_PATH}\n"
+            "RUN ${CONDA_ENV_PATH}/bin/python --version\n"
             # Install swe-rex using the standalone Python
-            f"RUN /root/python3.11/bin/pip3 install --no-cache-dir {PACKAGE_NAME}\n\n"
-            f"RUN ln -s /root/python3.11/bin/{REMOTE_EXECUTABLE_NAME} /usr/local/bin/{REMOTE_EXECUTABLE_NAME}\n\n"
+            f"RUN ln -s $CONDA_ENV_PATH/bin/{REMOTE_EXECUTABLE_NAME} /usr/local/bin/{REMOTE_EXECUTABLE_NAME}\n\n"
             f"RUN {REMOTE_EXECUTABLE_NAME} --version\n"
         )
 
